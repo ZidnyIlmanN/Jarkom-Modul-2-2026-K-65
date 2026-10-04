@@ -7,9 +7,10 @@
 * **Mata Kuliah**: Praktikum Jaringan Komputer 2026
 * **Modul**: II (Dua) - Routing Multi-Subnet, NAT Masquerade, dan Gerbang Jaringan
 * **Kelompok**: K-65
+* **Anggota Kelomok**: Zidny Ilman Nafi'an | 5027221072
 * **Prefix Subnet**: `10.96.x.x`
 * **Domain Proyek**: `k65.com`
-* **Status Progres Pengerjaan**: **Soal 1 s.d. 3 Selesai Dikerjakan, Soal 4 s.d. 10 Belum Dikerjakan (Soal Tersedia)**
+* **Status Progres Pengerjaan**: **Soal 1 s.d. 7**
 
 ---
 
@@ -92,29 +93,52 @@ Arsitektur jaringan The Mesh dirancang berbasiskan router Linux sentral (`rootki
 ### 1.2 Peta Pengkabelan (Wiring Map) & Arsitektur Kaskade Switch
 
 Router **rootkit** menggunakan 6 network adapter (`eth0` s.d. `eth5`):
-* `eth0` $ightarrow$ NAT (Koneksi WAN / Internet)
-* `eth1` $ightarrow$ **Switch1** (Subnet 1: Resolusi & Repository)
-* `eth2` $ightarrow$ **Switch6** (Subnet 2: Para Operator)
-* `eth3` $ightarrow$ **Switch7** (Subnet 3: Divisi Operasional)
-* `eth4` $ightarrow$ **Switch4** (Subnet 4: Gerbang Penyaring Statis)
-* `eth5` $ightarrow$ **Switch5** (Subnet 5: Gerbang Aplikasi Dinamis)
+* `eth0` $
+ightarrow$ NAT (Koneksi WAN / Internet)
+* `eth1` $
+ightarrow$ **Switch1** (Subnet 1: Resolusi & Repository)
+* `eth2` $
+ightarrow$ **Switch6** (Subnet 2: Para Operator)
+* `eth3` $
+ightarrow$ **Switch7** (Subnet 3: Divisi Operasional)
+* `eth4` $
+ightarrow$ **Switch4** (Subnet 4: Gerbang Penyaring Statis)
+* `eth5` $
+ightarrow$ **Switch5** (Subnet 5: Gerbang Aplikasi Dinamis)
 
 Arsitektur Kaskade Switch pada Subnet 1:
 * **Switch1** port 1 terhubung ke `rootkit` (`eth1`).
 * **Switch1** port 2 terhubung ke **Switch2** (Distribusi Resolusi DNS).
-  * `Switch2` port 1 $ightarrow$ `prab` (`eth0`)
-  * `Switch2` port 2 $ightarrow$ `tedd` (`eth0`)
+  * `Switch2` port 1 $
+ightarrow$ `prab` (`eth0`)
+  * `Switch2` port 2 $
+ightarrow$ `tedd` (`eth0`)
 * **Switch1** port 3 terhubung ke **Switch3** (Distribusi Web & Repository).
-  * `Switch3` port 1 $ightarrow$ `obladi` (`eth0`)
-  * `Switch3` port 2 $ightarrow$ `desmond` (`eth0`)
-  * `Switch3` port 3 $ightarrow$ `oblada` (`eth0`)
-  * `Switch3` port 4 $ightarrow$ `molly` (`eth0`)
+  * `Switch3` port 1 $
+ightarrow$ `obladi` (`eth0`)
+  * `Switch3` port 2 $
+ightarrow$ `desmond` (`eth0`)
+  * `Switch3` port 3 $
+ightarrow$ `oblada` (`eth0`)
+  * `Switch3` port 4 $
+ightarrow$ `molly` (`eth0`)
 
 Pengkabelan Subnet Lainnya:
-* **Switch6** (Subnet 2): port 0 $ightarrow$ `rootkit` (`eth2`), port 1 $ightarrow$ `alpha`, port 2 $ightarrow$ `beta`, port 3 $ightarrow$ `gamma`.
-* **Switch7** (Subnet 3): port 0 $ightarrow$ `rootkit` (`eth3`), port 1 $ightarrow$ `delta`, port 2 $ightarrow$ `epsilon`.
-* **Switch4** (Subnet 4): port 0 $ightarrow$ `rootkit` (`eth4`), port 1 $ightarrow$ `abbey` (`eth0`).
-* **Switch5** (Subnet 5): port 0 $ightarrow$ `rootkit` (`eth5`), port 1 $ightarrow$ `penny` (`eth0`).
+* **Switch6** (Subnet 2): port 0 $
+ightarrow$ `rootkit` (`eth2`), port 1 $
+ightarrow$ `alpha`, port 2 $
+ightarrow$ `beta`, port 3 $
+ightarrow$ `gamma`.
+* **Switch7** (Subnet 3): port 0 $
+ightarrow$ `rootkit` (`eth3`), port 1 $
+ightarrow$ `delta`, port 2 $
+ightarrow$ `epsilon`.
+* **Switch4** (Subnet 4): port 0 $
+ightarrow$ `rootkit` (`eth4`), port 1 $
+ightarrow$ `abbey` (`eth0`).
+* **Switch5** (Subnet 5): port 0 $
+ightarrow$ `rootkit` (`eth5`), port 1 $
+ightarrow$ `penny` (`eth0`).
 
 ### 1.3 Rincian Pembagian Segmen dan Peran Node
 
