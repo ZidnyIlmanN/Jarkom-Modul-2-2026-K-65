@@ -7,10 +7,10 @@
 * **Mata Kuliah**: Praktikum Jaringan Komputer 2026
 * **Modul**: II (Dua) - Routing Multi-Subnet, NAT Masquerade, dan Gerbang Jaringan
 * **Kelompok**: K-65
-* **Anggota Kelomok**: Zidny Ilman Nafi'an | 5027221072
+* **Anggota**: Zidny Ilman Nafi'an | 5027221072
 * **Prefix Subnet**: `10.96.x.x`
 * **Domain Proyek**: `k65.com`
-* **Status Progres Pengerjaan**: **Soal 1 s.d. 7**
+* **Status Progres Pengerjaan**: **Soal 1 s.d. 3 Selesai Dikerjakan, Soal 4 s.d. 10 Belum Dikerjakan (Soal Tersedia)**
 
 ---
 
@@ -89,6 +89,7 @@ Arsitektur jaringan The Mesh dirancang berbasiskan router Linux sentral (`rootki
          - oblada (.6)      |gamma  |    +---------+
          - molly (.7)       +-------+
 ```
+<img width="996" height="830" alt="image" src="https://github.com/user-attachments/assets/b35a7077-d8ad-4f83-9b96-c6fe79bfca7f" />
 
 ### 1.2 Peta Pengkabelan (Wiring Map) & Arsitektur Kaskade Switch
 
@@ -465,7 +466,255 @@ ping -c 2 google.com || host google.com
 > ### Soal 4
 > *Penjaga Direktori mulai menuliskan hukum The Mesh. Pada node prab, bangun zona <xxxx>.com sebagai authoritative dengan SOA yang menunjuk ke prab.<xxxx>.com, serta tambahkan catatan NS untuk prab.<xxxx>.com dan tedd.<xxxx>.com. Buat A record untuk prab.<xxxx>.com dan tedd.<xxxx>.com yang mengarah ke alamat IP mereka masing-masing, serta A record apex <xxxx>.com yang mengarah ke gerbang aplikasi dinamis (penny). Aktifkan fitur notify dan allow-transfer ke tedd, lalu set forwarders ke 192.168.122.1. Di node tedd, tarik zona <xxxx>.com dari master dan pastikan server menjawab secara authoritative. Setelah fondasi nama ini berdiri kokoh, perbarui urutan resolver pada seluruh Entitas non-router menjadi: IP prab, IP tedd, lalu 192.168.122.1. Verifikasi bahwa query ke domain apex maupun hostname di dalam zona dijawab dengan benar oleh prab atau tedd.*
 
-*(Tahap pengerjaan belum dilaksanakan)*
+### 6.1 Instalasi BIND9 pada Node `prab` (Master)
+
+Pertama, pastikan daemon `named` belum terinstal. Jika belum ada, lakukan instalasi paket BIND9:
+```bash
+# Cek apakah named sudah terinstal
+which named
+
+# Jika belum ada, install BIND9
+apt update
+apt install bind9 bind9-utils dnsutils -y
+```
+
+Setelah instalasi selesai, verifikasi keberhasilan:
+```bash
+which named
+```
+Output yang diharapkan:
+```text
+/usr/sbin/named
+```
+
+### 6.2 Konfigurasi `named.conf.options` pada Node `prab`
+
+Edit file konfigurasi opsi BIND:
+```bash
+nano /etc/bind/named.conf.options
+```
+
+Hapus seluruh isi default, lalu masukkan konfigurasi berikut:
+```text
+options {
+        directory "/var/cache/bind";
+
+        recursion yes;
+        allow-query { any; };
+
+        forwarders {
+                192.168.122.1;
+        };
+
+        dnssec-validation auto;
+
+        listen-on { any; };
+        listen-on-v6 { any; };
+};
+```
+Konfigurasi ini mengaktifkan rekursi, mengizinkan query dari semua sumber, dan meneruskan query yang tidak dapat dijawab secara lokal ke forwarder `192.168.122.1`.
+
+### 6.3 Konfigurasi Zone Master `k65.com` pada Node `prab`
+
+Edit file deklarasi zona lokal:
+```bash
+nano /etc/bind/named.conf.local
+```
+
+Masukkan konfigurasi zona master:
+```text
+zone "k65.com" {
+        type master;
+        file "/etc/bind/db.k65.com";
+
+        notify yes;
+        allow-transfer { 10.96.1.3; };
+};
+```
+- **`type master`**: Menjadikan `prab` sebagai DNS master authoritative untuk zona `k65.com`.
+- **`notify yes`**: Secara otomatis mengirim notifikasi ke slave saat ada perubahan zona.
+- **`allow-transfer { 10.96.1.3; }`**: Mengizinkan zone transfer hanya ke IP node `tedd`.
+
+### 6.4 Membuat File Zone `db.k65.com`
+
+Buat file zone record:
+```bash
+nano /etc/bind/db.k65.com
+```
+
+Masukkan konten berikut:
+```text
+$TTL    86400
+@       IN      SOA     prab.k65.com. admin.k65.com. (
+                        2026100201
+                        3600
+                        1800
+                        604800
+                        86400 )
+
+        IN      NS      prab.k65.com.
+        IN      NS      tedd.k65.com.
+
+@       IN      A       10.96.5.2
+
+prab    IN      A       10.96.1.2
+tedd    IN      A       10.96.1.3
+
+obladi  IN      A       10.96.1.4
+desmond IN      A       10.96.1.5
+oblada  IN      A       10.96.1.6
+molly   IN      A       10.96.1.7
+
+alpha   IN      A       10.96.2.2
+beta    IN      A       10.96.2.3
+gamma   IN      A       10.96.2.4
+
+delta   IN      A       10.96.3.2
+epsilon IN      A       10.96.3.3
+
+abbey   IN      A       10.96.4.2
+penny   IN      A       10.96.5.2
+```
+
+Penjelasan record:
+| Record | Tipe | Keterangan |
+|--------|------|------------|
+| `SOA prab.k65.com.` | SOA | Start of Authority menunjuk ke `prab` |
+| `NS prab.k65.com.` | NS | Nameserver primer |
+| `NS tedd.k65.com.` | NS | Nameserver sekunder (slave) |
+| `@ → 10.96.5.2` | A | Apex domain mengarah ke `penny` (gerbang aplikasi dinamis) |
+| `prab → 10.96.1.2` | A | Alamat IP node `prab` |
+| `tedd → 10.96.1.3` | A | Alamat IP node `tedd` |
+| Subdomain lainnya | A | Masing-masing node sesuai IP di Tabel Pengalamatan |
+
+### 6.5 Validasi File Zone
+
+Lakukan pengecekan sintaks file zona:
+```bash
+named-checkzone k65.com /etc/bind/db.k65.com
+```
+Output yang diharapkan:
+```text
+zone k65.com/IN: loaded serial 2026100201
+OK
+```
+
+### 6.6 Menjalankan BIND di Background pada Node `prab`
+
+Jalankan daemon BIND secara langsung:
+```bash
+named -c /etc/bind/named.conf
+```
+
+### 6.7 Verifikasi DNS Master `prab` dengan Query `dig`
+
+Lakukan pengujian resolusi DNS dari node `prab`:
+```bash
+dig @10.96.1.2 k65.com
+dig @10.96.1.2 prab.k65.com
+dig @10.96.1.2 alpha.k65.com
+```
+
+Hasil query `dig @10.96.1.2 k65.com` seharusnya menunjukkan:
+- **ANSWER SECTION** berisi A record `k65.com → 10.96.5.2`
+- **AUTHORITY SECTION** berisi NS record `prab.k65.com.` dan `tedd.k65.com.`
+- Flag `aa` (authoritative answer) aktif
+
+**Bukti verifikasi query `dig` pada DNS master `prab`:**
+
+![Hasil dig query ke DNS master prab — ANSWER SECTION menunjukkan k65.com → 10.96.5.2 dengan flag aa (authoritative answer)](bukti/soal4/dig-master-prab.png)
+
+---
+
+### 6.8 Konfigurasi Node `tedd` sebagai DNS Slave
+
+#### 6.8.1 Instalasi BIND9 pada Node `tedd`
+```bash
+apt update
+apt install bind9 bind9-utils dnsutils -y
+
+which named
+```
+
+#### 6.8.2 Konfigurasi `named.conf.options` pada Node `tedd`
+```bash
+nano /etc/bind/named.conf.options
+```
+Masukkan konfigurasi yang sama dengan `prab`:
+```text
+options {
+        directory "/var/cache/bind";
+
+        recursion yes;
+        allow-query { any; };
+
+        forwarders {
+                192.168.122.1;
+        };
+
+        dnssec-validation auto;
+
+        listen-on { any; };
+        listen-on-v6 { any; };
+};
+```
+
+#### 6.8.3 Konfigurasi Zone Slave pada Node `tedd`
+```bash
+nano /etc/bind/named.conf.local
+```
+Masukkan konfigurasi zona slave:
+```text
+zone "k65.com" {
+        type slave;
+        masters { 10.96.1.2; };
+        file "/var/cache/bind/db.k65.com";
+};
+```
+- **`type slave`**: Menjadikan `tedd` sebagai DNS slave yang menerima salinan zona dari master.
+- **`masters { 10.96.1.2; }`**: Menunjuk IP `prab` sebagai master source.
+- **`file "/var/cache/bind/db.k65.com"`**: Lokasi penyimpanan salinan zona yang ditransfer dari master.
+
+#### 6.8.4 Menjalankan BIND pada Node `tedd`
+```bash
+named -c /etc/bind/named.conf
+```
+
+#### 6.8.5 Verifikasi DNS Slave `tedd` dengan Query `dig`
+```bash
+dig @10.96.1.3 k65.com
+dig @10.96.1.3 prab.k65.com
+dig @10.96.1.3 alpha.k65.com
+```
+Hasil query harus menunjukkan jawaban authoritative yang identik dengan hasil dari `prab`.
+
+**Bukti verifikasi query `dig` pada DNS slave `tedd`:**
+
+![Hasil dig query ke DNS slave tedd — server merespons query k65.com dari 10.96.1.3](bukti/soal4/dig-slave-tedd.png)
+
+---
+
+### 6.9 Pembaruan Urutan Resolver pada Seluruh Entitas Non-Router
+
+Sesuai instruksi soal, urutan resolver di file `/etc/resolv.conf` pada seluruh entitas non-router diperbarui menjadi:
+```bash
+cat << 'EOF' > /etc/resolv.conf
+nameserver 10.96.1.2
+nameserver 10.96.1.3
+nameserver 192.168.122.1
+EOF
+```
+
+Urutan ini memastikan:
+1. **`10.96.1.2` (prab)** — Query pertama kali diarahkan ke DNS master authoritative.
+2. **`10.96.1.3` (tedd)** — Fallback ke DNS slave jika master tidak merespons.
+3. **`192.168.122.1`** — Fallback terakhir ke resolver NAT untuk domain eksternal.
+
+Perintah di atas dijalankan pada **seluruh host non-router**: `prab`, `tedd`, `obladi`, `desmond`, `oblada`, `molly`, `alpha`, `beta`, `gamma`, `delta`, `epsilon`, `abbey`, dan `penny`.
+
+**Bukti verifikasi konfigurasi resolver dan pengujian DNS dari klien `alpha`:**
+
+![Hasil cat /etc/resolv.conf dan dig query dari node alpha — menunjukkan urutan resolver 10.96.1.2, 10.96.1.3, 192.168.122.1 serta pengujian dig k65.com, prab.k65.com, dan alpha.k65.com](bukti/soal4/resolver&ping-client.png)
 
 ---
 
@@ -474,7 +723,70 @@ ping -c 2 google.com || host google.com
 > ### Soal 5
 > *"Entitas tanpa identitas adalah anomali," pesan Rootkit. Namai semua Entitas (hostname) sesuai glosarium: rootkit, alpha, beta, gamma, delta, epsilon, prab, tedd, abbey, penny, obladi, desmond, oblada, molly, dan verifikasi bahwa setiap host mengenali hostname tersebut secara system-wide. Buat setiap domain untuk masing-masing node sesuai dengan namanya (contoh: alpha.<xxxx>.com) dan assign IP masing-masing juga. Lakukan pengecualian untuk node yang bertanggung jawab atas prab dan tedd.*
 
-*(Tahap pengerjaan belum dilaksanakan)*
+### 7.1 Penamaan Hostname System-Wide pada Seluruh Entitas
+
+Seluruh 14 node dinamai sesuai glosarium: `rootkit`, `alpha`, `beta`, `gamma`, `delta`, `epsilon`, `prab`, `tedd`, `abbey`, `penny`, `obladi`, `desmond`, `oblada`, dan `molly`.
+
+Hostname diterapkan secara *system-wide* dengan menuliskan nama host pada berkas `/etc/hostname` serta mengeksekusi perintah `hostname <nama_node>`:
+
+```bash
+# Contoh pada node alpha:
+echo "alpha" > /etc/hostname
+hostname alpha
+```
+
+Langkah yang sama dilakukan pada setiap node dengan nama yang sesuai:
+
+| Node | Perintah |
+|------|----------|
+| `rootkit` | `echo "rootkit" > /etc/hostname && hostname rootkit` |
+| `prab` | `echo "prab" > /etc/hostname && hostname prab` |
+| `tedd` | `echo "tedd" > /etc/hostname && hostname tedd` |
+| `obladi` | `echo "obladi" > /etc/hostname && hostname obladi` |
+| `desmond` | `echo "desmond" > /etc/hostname && hostname desmond` |
+| `oblada` | `echo "oblada" > /etc/hostname && hostname oblada` |
+| `molly` | `echo "molly" > /etc/hostname && hostname molly` |
+| `alpha` | `echo "alpha" > /etc/hostname && hostname alpha` |
+| `beta` | `echo "beta" > /etc/hostname && hostname beta` |
+| `gamma` | `echo "gamma" > /etc/hostname && hostname gamma` |
+| `delta` | `echo "delta" > /etc/hostname && hostname delta` |
+| `epsilon` | `echo "epsilon" > /etc/hostname && hostname epsilon` |
+| `abbey` | `echo "abbey" > /etc/hostname && hostname abbey` |
+| `penny` | `echo "penny" > /etc/hostname && hostname penny` |
+
+### 7.2 Pemetaan A Record untuk Seluruh Subdomain Entitas pada Zona `k65.com`
+
+Berkas zona `/etc/bind/db.k65.com` pada node `prab` telah memuat pemetaan A record untuk setiap entitas menuju alamat IP masing-masing (dikonfigurasi sebelumnya pada Soal 4):
+
+| Domain | Tipe | IP Address |
+|--------|------|------------|
+| `prab.k65.com.` | A | `10.96.1.2` |
+| `tedd.k65.com.` | A | `10.96.1.3` |
+| `obladi.k65.com.` | A | `10.96.1.4` |
+| `desmond.k65.com.` | A | `10.96.1.5` |
+| `oblada.k65.com.` | A | `10.96.1.6` |
+| `molly.k65.com.` | A | `10.96.1.7` |
+| `alpha.k65.com.` | A | `10.96.2.2` |
+| `beta.k65.com.` | A | `10.96.2.3` |
+| `gamma.k65.com.` | A | `10.96.2.4` |
+| `delta.k65.com.` | A | `10.96.3.2` |
+| `epsilon.k65.com.` | A | `10.96.3.3` |
+| `abbey.k65.com.` | A | `10.96.4.2` |
+| `penny.k65.com.` | A | `10.96.5.2` |
+
+> **Catatan:** `prab.k65.com` dan `tedd.k65.com` telah dikonfigurasi sebelumnya pada Soal 4 sebagai bagian dari NS record dan A record nameserver. Sesuai instruksi soal, kedua node ini dikecualikan dari penambahan ulang karena sudah bertanggung jawab atas fungsi DNS.
+
+### 7.3 Verifikasi Hostname dan Resolusi Domain
+
+Verifikasi dilakukan dengan menjalankan perintah `hostname` dan `cat /etc/hostname` pada masing-masing node untuk memastikan hostname telah diterapkan secara system-wide:
+```bash
+hostname
+cat /etc/hostname
+```
+
+**Bukti verifikasi hostname pada node `alpha`:**
+
+![Verifikasi hostname pada node alpha — perintah hostname dan cat /etc/hostname menunjukkan hostname alpha telah diterapkan secara system-wide](bukti/soal5/hostname-verifikasi.png)
 
 ---
 
